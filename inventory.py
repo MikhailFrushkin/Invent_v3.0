@@ -33,8 +33,7 @@ def read_file(names: tuple):
     if os.path.exists(file_path):
         os.remove(file_path)
     try:
-        excel_data_df = pd.read_excel('{}'.format(names[0]),
-                                      sheet_name='6.1 Складские лоты', skiprows=13, header=1)
+        excel_data_df = pd.read_excel('{}'.format(names[0]), skiprows=13, header=1)
         excel_data_df = excel_data_df.fillna(0)
         dbhandle.connect()
         Cells.create_table()
@@ -55,9 +54,9 @@ def read_file(names: tuple):
 
         except peewee.InternalError as px:
             print(str(px))
+            exit_error()
 
-        excel_data_df = pd.read_excel('{}'.format(names[1]),
-                                      sheet_name='Sheet1', header=0)
+        excel_data_df = pd.read_excel('{}'.format(names[1]), header=0)
         try:
             for row in excel_data_df.values:
                 place = row[5]
@@ -69,6 +68,7 @@ def read_file(names: tuple):
 
         except peewee.InternalError as px:
             print(str(px))
+            exit_error()
         finally:
             dbhandle.close()
 
@@ -98,6 +98,7 @@ def check_data():
             not_dowload[i] = []
 
         for i in Check.select():
+            print('Проверяется {} из {}'.format(i.code, i.place))
             for j in Cells.select():
                 if i.place == j.place and i.code == j.code:
                     j.num_check = i.num
@@ -107,7 +108,7 @@ def check_data():
                 elif i.place not in place_list:
                     if i.code not in not_dowload[i.place]:
                         Cells.add_art(i.place, i.code, i.num,
-                                      name='Не выгружена ячейка в файле 6.1, но есть в файле просчета')
+                                      name='Ячейка не выгружена в файле 6.1, но есть в файле просчета')
                         art_dict[i.place].append(i.code)
                         not_dowload[i.place].append(i.code)
                 j.delta = j.num_check - j.num
@@ -146,13 +147,13 @@ def write_exsel():
 
         writer = pd.ExcelWriter('Результат.xlsx')
         sorted_df = df_marks.sort_values(by='Местоположение')
-        print(sorted_df)
         sorted_df.to_excel(writer, sheet_name='Result', index=False, na_rep='NaN')
 
         workbook = writer.book
         worksheet = writer.sheets['Result']
 
         cell_format = workbook.add_format()
+        cell_format.set_align('center')
         cell_format.set_bold()
         cell_format.set_num_format('[Blue]General;[Red]-General;General')
 
@@ -227,6 +228,7 @@ def write_exsel():
 
     except Exception as ex:
         logger.debug(ex)
+        exit_error()
     finally:
         dbhandle.close()
 
