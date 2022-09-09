@@ -178,9 +178,11 @@ def write_exsel():
             'Общее количество': []
         }
         for i in query_all:
-            data_all_result['Артикул'].append(i.code)
-            data_all_result['Общее количество'].append(i.delta)
-
+            if i.delta != 0:
+                data_all_result['Артикул'].append(i.code)
+                data_all_result['Общее количество'].append(i.delta)
+        df_marks_all = pd.DataFrame(data_all_result)
+        df_marks_all.to_excel(writer, sheet_name='Общий итог', index=False, na_rep='NaN')
         writer.save()
     except Exception as ex:
         logger.debug(ex)
