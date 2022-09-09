@@ -1,3 +1,4 @@
+import os
 import sys
 import time
 
@@ -29,53 +30,53 @@ def file_name() -> tuple:
 
 def read_file(names: tuple):
     """Запись в бд"""
-    file_path = "Data/mydatabase.db"
+    file_path = "mydatabase.db"
     if os.path.exists(file_path):
         os.remove(file_path)
     try:
-        excel_data_df = pd.read_excel('{}'.format(names[0]), skiprows=13, header=1)
+        excel_data_df = pd.read_excel('{}'.format(names[0]), skiprows=13, header=1,
+                                      usecols=['Склад', 'Местоположение', 'Код \nноменклатуры', 'Краткое наименование',
+                                               'Описание товара', 'Reason code', 'ТГ', 'Физические \nзапасы', 'Продано',
+                                               'Зарезерви\nровано', 'Доступно',
+                                               'Номер документа'])
+
         excel_data_df = excel_data_df.fillna(0)
         dbhandle.connect()
         Cells.create_table()
         Check.create_table()
-        try:
-            for row in excel_data_df.values:
-                if not isinstance(row[12], str):
-                    place = row[1]
-                    code = row[2]
-                    name = row[4]
-                    num = int(row[7]) if isinstance(row[7], float) else 0
-                    num_reserve = int(row[10]) if isinstance(row[10], float) else 0
-                    num_free = int(row[11]) if isinstance(row[11], float) else 0
-
-                    temp = Cells.create(place=place, code=code, name=name, num=num,
-                                        num_reserve=num_reserve, num_free=num_free)
-                    temp.save()
-
-        except peewee.InternalError as px:
-            print(str(px))
-            exit_error()
-
-        excel_data_df = pd.read_excel('{}'.format(names[1]), header=0)
-        try:
-            for row in excel_data_df.values:
-                place = row[5]
+        for row in excel_data_df.values:
+            if not isinstance(row[11], str):
+                place = row[1]
                 code = row[2]
-                num = row[7]
+                name = row[4]
+                num = int(row[7]) if isinstance(row[7], float) else 0
+                num_reserve = int(row[9]) if isinstance(row[9], float) else 0
+                num_free = int(row[10]) if isinstance(row[10], float) else 0
 
-                temp = Check.create(place=place, code=code, num=num)
+                temp = Cells.create(place=place, code=code, name=name, num=num,
+                                    num_reserve=num_reserve, num_free=num_free)
                 temp.save()
+    except Exception as ex:
+        logger.debug('Ошибка записи в базу, нет файла из 6.1(название не начинается на 6.1)\n'
+                     'или не хватает столбцов в таблице: {}'.format(ex))
+        exit_error()
+    try:
+        excel_data_df = pd.read_excel('{}'.format(names[1]), header=0,
+                                      usecols=['Код номенклатуры', 'Склад', 'Местоположение', 'Количество факт'])
+        for row in excel_data_df.values:
+            place = row[2]
+            code = row[0]
+            num = row[3]
 
-        except peewee.InternalError as px:
-            print(str(px))
-            exit_error()
-        finally:
-            dbhandle.close()
+            temp = Check.create(place=place, code=code, num=num)
+            temp.save()
 
     except Exception as ex:
-        logger.debug('Ошибка записи в базу: {}'.format(ex))
+        logger.debug('Ошибка записи в базу, нет файла просчета\n'
+                     'или не хватает столбцов в таблице: {}'.format(ex))
         exit_error()
-
+    finally:
+        dbhandle.close()
 
 def check_data():
     """Проверка расхождений"""
@@ -131,7 +132,7 @@ def write_exsel():
             'Посчитано': [],
             'Разница': []}
     dbhandle.connect()
-
+    count_error = 0
     query = Cells.select()
     for i in query:
         data['Местоположение'].append(i.place)
@@ -142,6 +143,9 @@ def write_exsel():
         data['Доступно'].append(i.num_free)
         data['Посчитано'].append(i.num_check)
         data['Разница'].append(i.delta)
+        if i.delta != 0:
+            count_error += 1
+
     try:
         df_marks = pd.DataFrame(data)
 
@@ -167,34 +171,49 @@ def write_exsel():
         worksheet.set_column('C:C', 80, cell_format2)
         worksheet.set_column('D:H', 12, cell_format3)
         worksheet.set_column('H:H', 12, cell_format)
-        writer.save()
 
-        writer = pd.ExcelWriter('Для импорта в пст(недостача).xlsx')
-        data_for_import = {
-            'Номенклатура': [],
-            'Кол-во': [],
-            'Со склада': [],
-            'С ячейки': [],
-            'На БЮ': [],
-            'На склад': [],
-            'Дата отгрузки': [],
-            'Промо': [],
-            'С "reason code"': [],
-            'На "reason code"': [],
-            'С профиля учета': [],
-            'На профиль учета': [],
-            'В ячейку': [],
-            'С сайта': [],
-            'На сайт': [],
-            'С владельца': [],
-            'На владельца': [],
-            'Из партии': [],
-            'В партию': [],
-            'Из ГТД': [],
-            'В ГТД': [],
-            'С серийного номера': [],
-            'На серийный номер': []
+        query_all = Cells.select(Cells.code, fn.SUM(Cells.delta)).group_by(Cells.code)
+        data_all_result = {
+            'Артикул': [],
+            'Общее количество': []
         }
+        for i in query_all:
+            data_all_result['Артикул'].append(i.code)
+            data_all_result['Общее количество'].append(i.delta)
+
+        writer.save()
+    except Exception as ex:
+        logger.debug(ex)
+        exit_error()
+        os.remove('mydatabase.db')
+
+    writer = pd.ExcelWriter('Для импорта в пст(недостача).xlsx')
+    data_for_import = {
+        'Номенклатура': [],
+        'Кол-во': [],
+        'Со склада': [],
+        'С ячейки': [],
+        'На БЮ': [],
+        'На склад': [],
+        'Дата отгрузки': [],
+        'Промо': [],
+        'С "reason code"': [],
+        'На "reason code"': [],
+        'С профиля учета': [],
+        'На профиль учета': [],
+        'В ячейку': [],
+        'С сайта': [],
+        'На сайт': [],
+        'С владельца': [],
+        'На владельца': [],
+        'Из партии': [],
+        'В партию': [],
+        'Из ГТД': [],
+        'В ГТД': [],
+        'С серийного номера': [],
+        'На серийный номер': []
+    }
+    try:
         for i in query:
             if i.delta < 0:
                 data_for_import['Номенклатура'].append(i.code)
@@ -224,10 +243,10 @@ def write_exsel():
         df_marks_import = pd.DataFrame(data_for_import)
         df_marks_import.to_excel(writer, sheet_name='import', index=False, na_rep='NaN')
 
+        print('Выявленно расхождений: {}'.format(count_error))
         writer.save()
-
     except Exception as ex:
-        logger.debug(ex)
+        logger.debug('Ошибка записи в файл для пст\n {}'.format(ex))
         exit_error()
     finally:
         dbhandle.close()
@@ -244,4 +263,9 @@ if __name__ == "__main__":
     read_file(file_name())
     check_data()
     write_exsel()
+    os.remove('mydatabase.db')
     print('Время сверки: {} секунд(ы)'.format((datetime.datetime.now() - time_start).total_seconds()))
+    print('Создан файл с расхождениями: Результат.xlsx')
+    print('Создан файл для импорта в перенос: Для импорта в пст(недостача).xlsx')
+
+    exit_error()
