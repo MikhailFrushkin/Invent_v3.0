@@ -78,6 +78,7 @@ def read_file(names: tuple):
     finally:
         dbhandle.close()
 
+
 def check_data():
     """Проверка расхождений"""
     try:
@@ -130,7 +131,8 @@ def write_exsel():
             'В резерве': [],
             'Доступно': [],
             'Посчитано': [],
-            'Разница': []}
+            'Разница': [],
+            'Количество упаковок': []}
     dbhandle.connect()
     count_error = 0
     query = Cells.select()
@@ -143,6 +145,8 @@ def write_exsel():
         data['Доступно'].append(i.num_free)
         data['Посчитано'].append(i.num_check)
         data['Разница'].append(i.delta)
+        data['Количество упаковок'].append(i.box)
+
         if i.delta != 0:
             count_error += 1
 
@@ -151,10 +155,10 @@ def write_exsel():
 
         writer = pd.ExcelWriter('Результат.xlsx')
         sorted_df = df_marks.sort_values(by='Местоположение')
-        sorted_df.to_excel(writer, sheet_name='Result', index=False, na_rep='NaN')
+        sorted_df.to_excel(writer, sheet_name='Сверка', index=False, na_rep='NaN')
 
         workbook = writer.book
-        worksheet = writer.sheets['Result']
+        worksheet = writer.sheets['Сверка']
 
         cell_format = workbook.add_format()
         cell_format.set_align('center')
@@ -171,6 +175,7 @@ def write_exsel():
         worksheet.set_column('C:C', 80, cell_format2)
         worksheet.set_column('D:H', 12, cell_format3)
         worksheet.set_column('H:H', 12, cell_format)
+        worksheet.set_column('I:I', 20, cell_format3)
 
         query_all = Cells.select(Cells.code, fn.SUM(Cells.delta)).group_by(Cells.code)
         data_all_result = {
@@ -183,6 +188,8 @@ def write_exsel():
                 data_all_result['Общее количество'].append(i.delta)
         df_marks_all = pd.DataFrame(data_all_result)
         df_marks_all.to_excel(writer, sheet_name='Общий итог', index=False, na_rep='NaN')
+        worksheet2 = writer.sheets['Общий итог']
+        worksheet2.set_column('B:B', 12, cell_format)
         writer.save()
     except Exception as ex:
         logger.debug(ex)

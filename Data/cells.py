@@ -4,6 +4,7 @@ import os
 
 from loguru import logger
 
+from Data.Request.scrap_site import parse
 from Data.connect_DB import *
 import peewee
 from peewee import *
@@ -24,6 +25,7 @@ class Cells(BaseModel):
     num_free = IntegerField(default=0, verbose_name='Доступно')
     num_check = IntegerField(default=0, verbose_name='Посчитано')
     delta = IntegerField(default=0, verbose_name='Разница')
+    box = IntegerField(default=1, verbose_name='Упаковок')
 
     @staticmethod
     def list():
@@ -34,9 +36,14 @@ class Cells(BaseModel):
         return Cells.select()
 
     @staticmethod
-    def add_art(place, art, number, name='Лишний артикул на ячейке', num=0, num_reserve=0, num_free=0):
+    def add_art(place, art, number, name='Лишний артикул на ячейке', num=0, num_reserve=0, num_free=0, box=1):
+        result_parse: dict = parse(art)
+        if result_parse:
+            name = result_parse['name']
+            box = result_parse['box']
         row = Cells(
-            place=place, code=art, name=name, num=num, num_reserve=num_reserve, num_free=num_free, num_check=number)
+            place=place, code=art, name=name, num=num, num_reserve=num_reserve, num_free=num_free, num_check=number,
+            box=box)
         row.save()
 
     class META:
