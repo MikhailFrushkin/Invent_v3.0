@@ -35,8 +35,8 @@ def read_file(names: tuple):
         os.remove(file_path)
     try:
         excel_data_df = pd.read_excel('{}'.format(names[0]), skiprows=13, header=1,
-                                      usecols=['Склад', 'Местоположение', 'Код \nноменклатуры', 'Краткое наименование',
-                                               'Описание товара', 'Reason code', 'ТГ', 'Физические \nзапасы', 'Продано',
+                                      usecols=['Склад', 'Местоположение', 'Код \nноменклатуры',
+                                               'Описание товара', 'Физические \nзапасы', 'Продано',
                                                'Зарезерви\nровано', 'Доступно',
                                                'Номер документа'])
 
@@ -45,17 +45,17 @@ def read_file(names: tuple):
         Cells.create_table()
         Check.create_table()
         for row in excel_data_df.values:
-            if not isinstance(row[11], str):
+            if not isinstance(row[8], str):
                 place = row[1]
                 code = row[2]
-                name = row[4]
-                num = int(row[7]) if isinstance(row[7], float) else 0
-                num_reserve = int(row[9]) if isinstance(row[9], float) else 0
-                num_free = int(row[10]) if isinstance(row[10], float) else 0
+                name = row[3]
+                num = int(row[4]) if isinstance(row[4], float) else row[4]
+                num_reserve = int(row[6]) if isinstance(row[6], float) else row[7]
+                num_free = int(row[7]) if isinstance(row[7], float) else row[7]
 
-                temp = Cells.create(place=place, code=code, name=name, num=num,
-                                    num_reserve=num_reserve, num_free=num_free)
-                temp.save()
+                Cells.create(place=place, code=code, name=name, num=num,
+                             num_reserve=num_reserve, num_free=num_free)
+                # temp.save()
     except Exception as ex:
         logger.debug('Ошибка записи в базу, нет файла из 6.1(название не начинается на 6.1)\n'
                      'или не хватает столбцов в таблице: {}'.format(ex))

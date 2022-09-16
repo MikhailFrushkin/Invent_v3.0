@@ -56,12 +56,10 @@ def parse(art: str) -> dict:
         response = requests.get('https://hoff.ru/vue/catalog/product/',
                                 params=params, cookies=cookies, headers=headers).json()
         name = response.get('data').get('name')
-        print(name)
 
         box = response.get('data').get('characteristic_tab').get('packages')
         if not box:
             box = ['1']
-        print(box)
         data = {
             'name': name,
             'box': len(box)
