@@ -1,13 +1,7 @@
-import csv
-import datetime
-import os
-
-from loguru import logger
+from peewee import *
 
 from Data.Request.scrap_site import parse
 from Data.connect_DB import *
-import peewee
-from peewee import *
 
 
 class BaseModel(Model):

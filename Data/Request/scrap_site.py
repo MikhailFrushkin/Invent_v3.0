@@ -65,8 +65,8 @@ def parse(art: str) -> dict:
             'box': len(box)
         }
         return data
-    except Exception as ex:
-        logger.debug('Товара нет в 6.1 и на сайте =( {}'.format(ex))
+    except:
+        logger.debug('Товара нет в 6.1 и на сайте')
 
 
 if __name__ == '__main__':

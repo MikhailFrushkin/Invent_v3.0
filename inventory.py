@@ -1,11 +1,12 @@
-import os
 import sys
 import time
-
-from Data.cells import *
+import os
+import datetime
 
 import pandas as pd
 from loguru import logger
+
+from Data.cells import *
 
 
 def file_name() -> tuple:
@@ -44,6 +45,7 @@ def read_file(names: tuple):
         dbhandle.connect()
         Cells.create_table()
         Check.create_table()
+        print('Запись в базу...')
         for row in excel_data_df.values:
             if not isinstance(row[8], str):
                 place = row[1]
