@@ -29,6 +29,15 @@ def file_name() -> tuple:
     return file_base, file_check
 
 
+def return_int(num):
+    if isinstance(num, float):
+        return int(num)
+    elif isinstance(num, str):
+        return int(num.replace('.0', ''))
+    else:
+        return num
+
+
 def read_file(names: tuple):
     """Запись в бд"""
     file_path = "mydatabase.db"
@@ -36,40 +45,52 @@ def read_file(names: tuple):
         os.remove(file_path)
     try:
         excel_data_df = pd.read_excel('{}'.format(names[0]), skiprows=13, header=1,
-                                      usecols=['Склад', 'Местоположение', 'Код \nноменклатуры',
-                                               'Описание товара', 'Физические \nзапасы', 'Продано',
-                                               'Зарезерви\nровано', 'Доступно',
+                                      usecols=['Местоположение', 'Код \nноменклатуры',
+                                               'Описание товара', 'Физические \nзапасы', 'Передано на доставку',
+                                               'Продано', 'Зарезерви\nровано',
+                                               'Доступно',
                                                'Номер документа'])
-
+        key_code = list(excel_data_df.keys()).index('Код \nноменклатуры')
+        key_place = list(excel_data_df.keys()).index('Местоположение')
+        key_name = list(excel_data_df.keys()).index('Описание товара')
+        key_num = list(excel_data_df.keys()).index('Физические \nзапасы')
+        key_num_dost = list(excel_data_df.keys()).index('Передано на доставку')
+        key_num_sell = list(excel_data_df.keys()).index('Продано')
+        key_num_res = list(excel_data_df.keys()).index('Зарезерви\nровано')
+        key_num_free = list(excel_data_df.keys()).index('Доступно')
+        key_doc = list(excel_data_df.keys()).index('Номер документа')
         excel_data_df = excel_data_df.fillna(0)
         dbhandle.connect()
         Cells.create_table()
         Check.create_table()
         print('Запись в базу...')
         for row in excel_data_df.values:
-            if not isinstance(row[8], str):
-                place = row[1]
-                code = row[2]
-                name = row[3]
-                num = int(row[4]) if isinstance(row[4], float) else row[4]
-                num_reserve = int(row[6]) if isinstance(row[6], float) else row[7]
-                num_free = int(row[7]) if isinstance(row[7], float) else row[7]
-
-                Cells.create(place=place, code=code, name=name, num=num,
-                             num_reserve=num_reserve, num_free=num_free)
-                # temp.save()
+            if not isinstance(row[key_doc], str):
+                place = row[key_place]
+                code = row[key_code]
+                name = row[key_name]
+                num = return_int(row[key_num])
+                num_reserve = return_int(row[key_num_res])
+                num_free = return_int(row[key_num_free])
+                num_sell = return_int(row[key_num_sell])
+                num_dost = return_int(row[key_num_dost])
+                Cells.add_art(place=place, code=code, name=name, num=num, num_dost=num_dost,
+                              num_sell=num_sell, num_reserve=num_reserve, num_free=num_free)
     except Exception as ex:
         logger.debug('Ошибка записи в базу, нет файла из 6.1(название не начинается на 6.1)\n'
                      'или не хватает столбцов в таблице: {}'.format(ex))
         exit_error()
+
     try:
         excel_data_df = pd.read_excel('{}'.format(names[1]), header=0,
-                                      usecols=['Код номенклатуры', 'Склад', 'Местоположение', 'Количество факт'])
+                                      usecols=['Код номенклатуры', 'Местоположение', 'Количество факт'])
+        key_code = list(excel_data_df.keys()).index('Код номенклатуры')
+        key_place = list(excel_data_df.keys()).index('Местоположение')
+        key_num = list(excel_data_df.keys()).index('Количество факт')
         for row in excel_data_df.values:
-            place = row[2]
-            code = row[0]
-            num = row[3]
-
+            place = row[key_place]
+            code = row[key_code]
+            num = row[key_num]
             temp = Check.create(place=place, code=code, num=num)
             temp.save()
 
@@ -131,10 +152,11 @@ def write_exsel():
             'Описание товара': [],
             'Физ.запас': [],
             'В резерве': [],
+            'Продано': [],
+            'Передано на доставку': [],
             'Доступно': [],
             'Посчитано': [],
-            'Разница': [],
-            'Количество упаковок': []}
+            'Разница': []}
     dbhandle.connect()
     count_error = 0
     query = Cells.select()
@@ -147,14 +169,17 @@ def write_exsel():
         data['Доступно'].append(i.num_free)
         data['Посчитано'].append(i.num_check)
         data['Разница'].append(i.delta)
-        data['Количество упаковок'].append(i.box)
+        data['Продано'].append(i.num_sell)
+        data['Передано на доставку'].append(i.num_dost)
 
         if i.delta != 0:
             count_error += 1
 
     try:
         df_marks = pd.DataFrame(data)
-
+        len_doc = 1
+        if data['Местоположение']:
+            len_doc = len(data['Местоположение'])
         writer = pd.ExcelWriter('Результат.xlsx')
         sorted_df = df_marks.sort_values(by='Местоположение')
         sorted_df.to_excel(writer, sheet_name='Сверка', index=False, na_rep='NaN')
@@ -165,19 +190,22 @@ def write_exsel():
         cell_format = workbook.add_format()
         cell_format.set_align('center')
         cell_format.set_bold()
+        cell_format.set_border(1)
         cell_format.set_num_format('[Blue]General;[Red]-General;General')
 
-        cell_format2 = workbook.add_format()
-        cell_format2.set_align('left')
+        cell_format2 = workbook.add_format({'align': 'left',
+                                            'valign': 'vcenter',
+                                            'border': 1})
 
-        cell_format3 = workbook.add_format()
-        cell_format3.set_align('center')
+        cell_format3 = workbook.add_format({'align': 'center',
+                                            'valign': 'vcenter',
+                                            'border': 1})
 
         worksheet.set_column('A:B', 18, cell_format2)
-        worksheet.set_column('C:C', 80, cell_format2)
-        worksheet.set_column('D:H', 12, cell_format3)
-        worksheet.set_column('H:H', 12, cell_format)
-        worksheet.set_column('I:I', 20, cell_format3)
+        worksheet.set_column('C:C', 50, cell_format2)
+        worksheet.set_column('D:I', 12, cell_format3)
+        worksheet.set_column('G:G', 20, cell_format3)
+        worksheet.set_column('J:J', 12, cell_format)
 
         query_all = Cells.select(Cells.code, fn.SUM(Cells.delta)).group_by(Cells.code)
         data_all_result = {
@@ -264,7 +292,7 @@ def write_exsel():
 
 
 def exit_error():
-    time.sleep(15)
+    time.sleep(3)
     exit()
 
 
